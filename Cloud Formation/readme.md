@@ -1,5 +1,12 @@
 # Cloud Formation  
 
+## 目次  
+1. [Try1 S3で静的サイトのデプロイ](#content1)  
+2. [Try2 S3のデプロイ](content2)  
+3. [S3のテンプレート情報](content3)  
+
+<h2 id="content1">Try1 S3で静的サイトのデプロイ</h2>  
+
 参考サイト：https://qiita.com/YoshinagaYuta/items/26d2843fa9a8dfda5240#cloudformation%E5%AE%9F%E7%94%A8%E4%BE%8B  
 
 参考サイトを元に以下の構成を作成する  
@@ -150,8 +157,7 @@ Resources:
 ![img](./img/9.png)  
 そもそも参考にしていたサイトが3年前以上のものだったので、別のものを参考にしてみた。  
 
-
-## Try2 S3バケットの追加  
+<h2 id="content2">Try2 S3のデプロイ</h2>  
 
 参考サイト：https://www.youtube.com/watch?v=Na9Wl4Flr8M  
 （この動画も古いが、デプロイ内容がシンプルであったためTryしてみる。）  
@@ -170,7 +176,125 @@ Resources:
 S3バケットが作成されていることがわかる  
 ![img](./img/11.png) 
 
+<h2 id="content3">S3のテンプレート情報</h2>  
+
+CloudFormationのテンプレートを作成するときは  
+1から自分の手でテンプレートを作成するより、ネット上に数万とあるテンプレートを使用したほうがいいが  
+大事なのは、拾ってきたテンプレートを自分の使いたいように編集できること。  
+(テンプレートの理解が大事)  
+
+CloudFormationでデプロイするテンプレートは以下のサイトにある  
+https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/quickref-s3.html  
+
+S3テンプレートのパラメータについては以下のサイトにある  
+https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-resource-s3-bucket.html  
 
 
+<h2 id="content4">S3の静的サイトの公開</h2>  
 
+静的サイトをS3で作成するテンプレートを作成する。  
+一旦コンソール画面からの作成を行ってみる→[静的ウェブサイトの設定](Static%20website%20settings.md)  
+
+テンプレートはAWSのスニペットを使用  
+https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/quickref-s3.html  
+
+templateのyamlは以下  
+```yaml
+AWSTemplateFormatVersion: 2010-09-09
+Resources:
+  S3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      AccessControl: PublicRead
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+  BucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      PolicyDocument:
+        Id: MyPolicy
+        Version: 2012-10-17
+        Statement:
+          - Sid: PublicReadForGetBucketObjects
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Join 
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref S3Bucket
+                - /*
+      Bucket: !Ref S3Bucket
+Outputs:
+  WebsiteURL:
+    Value: !GetAtt 
+      - S3Bucket
+      - WebsiteURL
+    Description: URL for website hosted on S3
+  S3BucketSecureURL:
+    Value: !Join 
+      - ''
+      - - 'https://'
+        - !GetAtt 
+          - S3Bucket
+          - DomainName
+    Description: Name of S3 bucket to hold website content
+```
+テンプレートの設定内容を読み解いていく  
+```yaml
+  S3Bucket:
+    Type: 'AWS::S3::Bucket'
+    Properties:
+      AccessControl: PublicRead
+      WebsiteConfiguration:
+        IndexDocument: index.html
+        ErrorDocument: error.html
+    DeletionPolicy: Retain
+    UpdateReplacePolicy: Retain
+```
+- AccessControl: PublicRead  
+  所有者とグループ？がアクセス可能  
+  ACLは無効でいいので、pravateにする  
+  ドキュメント：https://docs.aws.amazon.com/AmazonS3/latest/userguide/acl-overview.html#canned-acl  
+- WebsiteConfiguration
+  静的ウェブサイトホスティングの設定  
+  ドキュメント：https://docs.aws.amazon.com/AWSCloudFormation/latest/UserGuide/aws-properties-s3-bucket-websiteconfiguration.html  
+- DeletionPolicy  
+  スタックが削除されたときの設定  
+  Retainはスタックを削除する際に、リソースやコンテンツを削除せず保持する  
+  ドキュメント：https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-attribute-deletionpolicy.html
+- UpdateReplacePolicy  
+  タック更新オペレーションでリソースを置き換えるときに、リソースの既存の物理インスタンスを保持したり、必要に応じてバックアップしたりします  
+  Retainは保持する  
+  ドキュメント：ドキュメント：https://docs.aws.amazon.com/ja_jp/AWSCloudFormation/latest/UserGuide/aws-attribute-deletionpolicy.html  
+
+```yaml
+  BucketPolicy:
+    Type: 'AWS::S3::BucketPolicy'
+    Properties:
+      PolicyDocument:
+        Id: MyPolicy
+        Version: 2012-10-17
+        Statement:
+          - Sid: PublicReadForGetBucketObjects
+            Effect: Allow
+            Principal: '*'
+            Action: 's3:GetObject'
+            Resource: !Join 
+              - ''
+              - - 'arn:aws:s3:::'
+                - !Ref S3Bucket
+                - /*
+      Bucket: !Ref S3Bucket
+```
+これは[Amazon S3 での静的ウェブサイトの設定](./Static%20website%20settings.md)で試したときの  
+特定のIPが追加されるように設定
+
+[practice3.yml](./template/practice3.yml)をCloudformationでデプロイ→成功  
+あとはindex.htmlをバケットに保存することでOK  
+
+今回したデプロイは、札幌の開発ネットワークからのアクセスのみを許可したS3の静的ウェブサイトをCloudformationで作成した。  
 
